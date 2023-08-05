@@ -21,6 +21,7 @@ import torchvision.transforms as transforms
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import Subset
 
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -83,7 +84,7 @@ best_acc1 = 0
 
 def main():
     args = parser.parse_args()
-
+    
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
@@ -134,6 +135,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + gpu
+
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
     # create model
@@ -157,7 +159,8 @@ def main_worker(gpu, ngpus_per_node, args):
                 # When using a single GPU per process and per
                 # DistributedDataParallel, we need to divide the batch size
                 # ourselves based on the total number of GPUs of the current node.
-                args.batch_size = int(args.batch_size / ngpus_per_node)
+                #args.batch_size = int(args.batch_size / ngpus_per_node)
+                args.batch_size = int(args.batch_size) #ADIL
                 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
                 model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
             else:
@@ -297,16 +300,25 @@ def main_worker(gpu, ngpus_per_node, args):
                 'scheduler' : scheduler.state_dict()
             }, is_best)
 
+def overwrite_file_content(file_path, value):
+    with open(file_path, 'w') as file:
+        file.write('{}'.format(value))
+        file.flush()
+
+file_loss='/home/amd-guest/metrics/smi_exporter/install/binconfig/appval.dat'
+file_iter='/home/amd-guest/metrics/smi_exporter/install/binconfig/appval2.dat'
 
 def train(train_loader, model, criterion, optimizer, epoch, device, args):
+    
     batch_time = AverageMeter('Time', ':6.3f')
+    imgsec = AverageMeter('Img/sec', ':4.2f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
+        [batch_time, imgsec, data_time, losses, top1, top5],
         prefix="Epoch: [{}]".format(epoch))
 
     # switch to train mode
@@ -340,7 +352,16 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
+        # measure performance
+        imgs = args.batch_size*args.world_size/batch_time.val
+        imgsec.update(args.batch_size*args.world_size/batch_time.val)
+
+        if args.rank == 0 and i % args.print_freq == 0:
+            # Writing Loss values to file
+            prog=((epoch/args.epochs)+(((epoch+1)/args.epochs)*((i + 1)/len(train_loader))))*100
+            overwrite_file_content(file_loss, losses.avg)
+            overwrite_file_content(file_iter, prog)
+
             progress.display(i + 1)
 
 
