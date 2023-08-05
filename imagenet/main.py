@@ -358,7 +358,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
 
         if args.rank == 0 and i % args.print_freq == 0:
             # Writing Loss values to file
-            prog=((epoch/args.epochs)+(((epoch+1)/args.epochs)*((i + 1)/len(train_loader))))*100
+            prog=((epoch/args.epochs)+((1/args.epochs)*((i + 1)/len(train_loader))))*100
             overwrite_file_content(file_loss, losses.avg)
             overwrite_file_content(file_iter, prog)
 
